@@ -1,7 +1,7 @@
 #include "compress.hpp"
 
 void writeHeaderSizeLength(ofstream *file_ptr, size_t length){
-	cl_uchar segment_size_length = (unsigned char) length;
+	cl_uchar segment_size_length = (unsigned char) to_string(length).size();
 	cl_uint temp_segment_size = SEGMENT_SIZE;
 	file_ptr->put(segment_size_length);
 	string buffer = "";
@@ -238,10 +238,7 @@ void compressController(string original_file_path){
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Segment Size ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-	writeHeaderSizeLength(&output_file, to_string(SEGMENT_SIZE).size());
-
-	output_file << output_header_buffer;
-	output_header_buffer = "";
+	writeHeaderSizeLength(&output_file, SEGMENT_SIZE);
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Padding ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
