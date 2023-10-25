@@ -12,4 +12,4 @@ HuffNode *generateHuffmanTree(vector<HuffNode *> frequencies);
 void generateHuffmanTree(HuffNode *const root, const string &codes, const unsigned char ch);
 u_int32_t populateHuffmanTable(vector<HuffNode *> *frequencies, HuffNode *rootNode, string &value);
 
-#endif
+#endif // HUFFTREE

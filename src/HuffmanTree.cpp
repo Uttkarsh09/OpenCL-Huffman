@@ -68,7 +68,7 @@ HuffNode *generateHuffmanTree(vector<HuffNode *> frequencies)
 
 void generateHuffmanTree(HuffNode *const root, const string &codes, const unsigned char ch){
 	HuffNode *traverse = root;
-	int i;
+	int i = 0;
 
 	while(codes[i] != '\0'){
 		if(codes[i] == '0'){

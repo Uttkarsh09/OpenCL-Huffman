@@ -57,4 +57,4 @@ struct HuffNode{
 		#define GAP_SEGMENT_SIZE 512 
 	#endif
 
-#endif 
+#endif // CONFIG
