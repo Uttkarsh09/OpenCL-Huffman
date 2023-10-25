@@ -1,8 +1,23 @@
 #include "compress.hpp"
 
+void writeHeaderSizeLength(ofstream *file_ptr, size_t length){
+	cl_uchar segment_size_length = (unsigned char) length;
+	cl_uint temp_segment_size = SEGMENT_SIZE;
+	file_ptr->put(segment_size_length);
+	string buffer = "";
+	ushort last;
+	
+	while(temp_segment_size != 0){
+		last = temp_segment_size % 10;
+		buffer = to_string(last) + buffer;
+		temp_segment_size /= 10;
+	}
+	
+	(*file_ptr) << buffer;
+}
+
 void compressController(string original_file_path){
-	CLFW *clfw = nullptr;
-	clfw = new CLFW();
+	CLFW *clfw = new CLFW();
 	const int local_size = 5;
 	MyLogger *l = MyLogger::GetInstance("./logs/compress_logs.log");
 
@@ -212,17 +227,7 @@ void compressController(string original_file_path){
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Gap Array ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-	u_char gap_array_size_length = (unsigned char) to_string(gap_array_size).size();
-	cl_uint temp_gap_array_size = gap_array_size;
-	ushort last;
-
-	output_file.put((unsigned char)gap_array_size_length);
-	
-	while(temp_gap_array_size != 0){
-		last = temp_gap_array_size % 10;
-		output_header_buffer = to_string(last) + output_header_buffer;
-		temp_gap_array_size /= 10;
-	}	
+	writeHeaderSizeLength(&output_file, gap_array_size);
 	
 	for(cl_uint i=0 ; i<gap_array_size ; i++){
 		output_header_buffer.push_back(gap_array[i]);
@@ -233,15 +238,7 @@ void compressController(string original_file_path){
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Segment Size ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-	u_char segment_size_length = (unsigned char) to_string(SEGMENT_SIZE).size();
-	cl_uint temp_segment_size = SEGMENT_SIZE;
-	output_file.put(segment_size_length);
-	
-	while(temp_segment_size != 0){
-		last = temp_segment_size % 10;
-		output_header_buffer = to_string(last) + output_header_buffer;
-		temp_segment_size /= 10;
-	}
+	writeHeaderSizeLength(&output_file, to_string(SEGMENT_SIZE).size());
 
 	output_file << output_header_buffer;
 	output_header_buffer = "";
@@ -296,6 +293,10 @@ void compressController(string original_file_path){
 	delete[] gap_array;
 	delete[] compressed_output;
 	delete[] prefix_sums;
+
+	gap_array = nullptr;
+	compressed_output = nullptr;
+	prefix_sums = nullptr;
 
 	clfw->ocl_release_buffer(compressed_output_buffer);
 	clfw->ocl_uninitialize();
