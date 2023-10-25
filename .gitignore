@@ -1,0 +1,7 @@
+test/
+bin/
+logs/
+test.cpp
+main
+.vscode
+Log.txt
