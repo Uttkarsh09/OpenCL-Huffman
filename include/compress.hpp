@@ -7,4 +7,4 @@
 
 void compressController(string original_file_path);
 
-#endif COMPRESS_HEADERS
+#endif // COMPRESS_HEADERS
