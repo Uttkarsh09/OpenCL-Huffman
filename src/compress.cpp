@@ -1,9 +1,9 @@
 #include "compress.hpp"
 
-void writeHeaderSizeLength(ofstream *file_ptr, size_t length){
+void writeHeaderSizeLength(ofstream &file_ptr, size_t length){
 	cl_uchar segment_size_length = (unsigned char) to_string(length).size();
 	cl_uint temp_segment_size = SEGMENT_SIZE;
-	file_ptr->put(segment_size_length);
+	file_ptr.put(segment_size_length);
 	string buffer = "";
 	ushort last;
 	
@@ -13,7 +13,7 @@ void writeHeaderSizeLength(ofstream *file_ptr, size_t length){
 		temp_segment_size /= 10;
 	}
 	
-	(*file_ptr) << buffer;
+	file_ptr << buffer;
 }
 
 void compressController(string original_file_path){
@@ -98,7 +98,7 @@ void compressController(string original_file_path){
 	compressed_file_size_bits = populateHuffmanTable(&total_frequencies, rootNode, tempStr);
 
 	l->logIt(l->LOG_INFO, "Original File Size -> %d bytes", file_size);
-	l->logIt(l->LOG_INFO, "encoded file size = %d bits", compressed_file_size_bits);
+	l->logIt(l->LOG_INFO, "compressed file size = %d bits", compressed_file_size_bits);
 	l->logIt(l->LOG_INFO, "i.e %d bytes + %d bits", compressed_file_size_bits/8, compressed_file_size_bits%8);
 
 	// cout << "After populateHuffmanTable" << endl;
@@ -227,7 +227,7 @@ void compressController(string original_file_path){
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Gap Array ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-	writeHeaderSizeLength(&output_file, gap_array_size);
+	writeHeaderSizeLength(output_file, gap_array_size);
 	
 	for(cl_uint i=0 ; i<gap_array_size ; i++){
 		output_header_buffer.push_back(gap_array[i]);
@@ -238,12 +238,16 @@ void compressController(string original_file_path){
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Segment Size ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-	writeHeaderSizeLength(&output_file, SEGMENT_SIZE);
+	writeHeaderSizeLength(output_file, SEGMENT_SIZE);
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Padding ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 	short padding = (8 - ((compressed_file_size_bits) & (7))) & (7);
 	output_file.put((unsigned char)padding);
+
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Data Size ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+	writeHeaderSizeLength(output_file, file_size);
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Compressed Data ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 	unsigned char ch = 0;
