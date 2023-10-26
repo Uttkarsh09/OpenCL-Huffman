@@ -7,4 +7,4 @@
 
 void decompressController(string compressed_file_path);
 
-#endif DECOMPRESS_HEADERS
+#endif // DECOMPRESS_HEADERS

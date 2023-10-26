@@ -10,7 +10,7 @@ __kernel void huffmanCompress(
   	if (gid < input_size) {
     	char symbol = input[gid];
 		short i=0;
-
+		
 		do{
 			compressed_data[(17*gid) + i] = huffman_codes[((int)symbol*17) + i];
 			++i;

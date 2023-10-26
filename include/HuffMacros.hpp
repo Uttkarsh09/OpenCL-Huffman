@@ -11,5 +11,7 @@
 #define SEGMENT_SIZE 512
 #endif
 
+#define HUFF_TREE_MAX_NODE_COUNT 131071
+
 
 #endif // HUFF_MACROS
