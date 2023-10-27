@@ -129,19 +129,16 @@ void compressController(string original_file_path)
 	cl_mem huffman_codes_buffer = clfw->ocl_create_buffer(CL_MEM_READ_ONLY, TOTAL_CHARS * sizeof(char) * (MAX_HUFF_ENCODING_LENGTH + 1));
 	cl_mem compressed_buffer = clfw->ocl_create_buffer(CL_MEM_READ_WRITE, compressed_file_size_bytes);
 	cl_mem prefix_sums_buffer = clfw->ocl_create_buffer(CL_MEM_READ_WRITE, file_size * sizeof(ulong));
-	cl_mem global_counter = clfw->ocl_create_buffer(CL_MEM_READ_WRITE, sizeof(int));
-	cl_mem global_compressed_bits_written = clfw->ocl_create_buffer(CL_MEM_READ_WRITE, sizeof(int));
 	string ocl_compression_kernel_path = "./src/oclKernels/Compression.cl";
 	string ocl_parallel_prefix_sum_kernel_path = "./src/oclKernels/ParallelPrefixSum.cl";
 	ulong *prefix_sums = new ulong[file_size];
 	int total_segments = (file_size / SEGMENT_SIZE) + ((file_size % SEGMENT_SIZE) != 0);
 	int zero = 0;
 	unsigned char *compressed_output = NULL;
+	cl_mem global_bits_written = clfw->ocl_create_buffer(CL_MEM_READ_WRITE, total_segments);
 
 	clfw->host_alloc_mem((void**)&compressed_output, "uchar", compressed_file_size_bytes);
 
-	clfw->ocl_write_buffer(global_compressed_bits_written, sizeof(int), &zero);
-	clfw->ocl_write_buffer(global_counter, sizeof(int), &zero);
 	clfw->ocl_write_buffer(huffman_codes_buffer, sizeof(char) * TOTAL_CHARS * (MAX_HUFF_ENCODING_LENGTH + 1), huffman_codes);
 	clfw->ocl_create_program(ocl_compression_kernel_path.c_str());
 	
@@ -150,13 +147,12 @@ void compressController(string original_file_path)
 
 	clfw->ocl_create_kernel(
 		"huffmanCompress",
-		"bbbbbblii",
+		"bbbbblii",
 		file_buffer,
 		huffman_codes_buffer,
 		compressed_buffer,
 		prefix_sums_buffer,
-		global_counter,
-		global_compressed_bits_written,
+		global_bits_written,
 		file_size,
 		SEGMENT_SIZE,
 		total_segments
@@ -195,6 +191,29 @@ void compressController(string original_file_path)
 	clfw->ocl_release_buffer(file_buffer);
 
 // -------------------------------------------------------------------------------------------------------------------
+// Calculating Prefix Sum
+// -------------------------------------------------------------------------------------------------------------------
+	ulong limit, offset;
+
+	// for(int i=0 ; i<512 ; i++){
+	// 	l->logIt(l->LOG_CRITICAL, "prefix_sums[%d]=%d", i, prefix_sums[i]);
+	// }
+
+	for(int i=1 ; i<total_segments ; i++){
+		offset = i*SEGMENT_SIZE;
+		limit = (file_size<(offset+SEGMENT_SIZE)) 
+				? SEGMENT_SIZE - ((offset + SEGMENT_SIZE) - file_size)
+				: SEGMENT_SIZE;
+		// l->logIt(l->LOG_DEBUG, "offset=%ld", offset);
+		// l->logIt(l->LOG_DEBUG, "limit=%ld\n", limit);
+
+		for(int j=0 ; j<limit ; j++){
+			prefix_sums[offset+j] += prefix_sums[(SEGMENT_SIZE * i)-1];
+			// l->logIt(l->LOG_DEBUG, "prefix_sums[%d]=%d", offset+j, prefix_sums[offset+j]);
+		}
+	}
+
+// -------------------------------------------------------------------------------------------------------------------
 // Gap Arrays
 // -------------------------------------------------------------------------------------------------------------------
 	puts("\nIN GAP ARRAYS");
@@ -216,12 +235,14 @@ void compressController(string original_file_path)
 		if (prefix_sums[i] >= next_limit)
 		{
 			gap_array[gap_idx] = prefix_sums[i] - next_limit;
-			l->logIt(l->LOG_DEBUG, "gap_array[%d] = %ld", gap_idx, gap_array[gap_idx]);
+			// l->logIt(l->LOG_DEBUG, "gap_array[%d] = %ld", gap_idx, gap_array[gap_idx]);
 			++gap_idx;
 			next_limit = SEGMENT_SIZE * gap_idx;
 		}
 	}
 
+	delete[] prefix_sums;
+	prefix_sums = nullptr;
 // -------------------------------------------------------------------------------------------------------------------
 // Writing Compressed file
 // -------------------------------------------------------------------------------------------------------------------
@@ -306,11 +327,9 @@ void compressController(string original_file_path)
 
 	delete[] gap_array;
 	delete[] compressed_output;
-	delete[] prefix_sums;
 
 	gap_array = nullptr;
 	compressed_output = nullptr;
-	prefix_sums = nullptr;
 
 	clfw->ocl_uninitialize();
 	l->deleteInstance();
