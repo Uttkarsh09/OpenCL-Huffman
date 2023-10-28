@@ -2,19 +2,10 @@
 
 void writeHeaderSizeLength(ofstream &file_ptr, size_t length){
 	cl_uchar segment_size_length = (unsigned char) to_string(length).size();
-	cl_uint temp_segment_size = SEGMENT_SIZE;
 	file_ptr.put(segment_size_length);
-	string buffer = "";
-	ushort last;
-	
-	while(temp_segment_size != 0){
-		last = temp_segment_size % 10;
-		buffer = to_string(last) + buffer;
-		temp_segment_size /= 10;
-	}
-	
-	file_ptr << buffer;
+	file_ptr << length;
 }
+
 
 void compressController(string original_file_path){
 	CLFW *clfw = new CLFW();
