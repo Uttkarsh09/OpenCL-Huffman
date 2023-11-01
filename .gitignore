@@ -1,5 +1,6 @@
 testit.cpp
 testit
-main
+main.exe
 .vscode
 Log.txt
+decompressed.txt

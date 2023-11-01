@@ -34,11 +34,6 @@ HuffNode *generateHuffmanTree(vector<HuffNode *> frequencies)
 	// Sort by frequency
 	sort(frequencies.begin(), frequencies.end(), sortByCharFreq);
 
-	cout << "After sorting: " << endl;
-	for (HuffNode *node : frequencies)
-	{
-		cout << "Character: " << node->ch << ", Frequency: " << node->frequency << endl;
-	}
 
 	if (frequencies.size() == 1)
 	{
@@ -103,7 +98,6 @@ u_int32_t populateHuffmanTable(vector<HuffNode *> *frequencies, HuffNode *rootNo
 			rootNode->compressed_length = value.size();
 			rootNode->compressed = value;
 			temp += value.size() * rootNode->frequency;
-			cout << rootNode->ch << "->" << rootNode->compressed << endl;
 		}
 
 		value.push_back('1');
