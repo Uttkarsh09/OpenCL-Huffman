@@ -7,7 +7,7 @@ using namespace std;
 
 int main(void)
 {
-	compressController("./test/book.txt");
+	// compressController("./test/book.txt");
 	decompressController("./test/book.txt.huff");
 	return EXIT_SUCCESS;
 }

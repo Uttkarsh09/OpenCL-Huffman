@@ -20,8 +20,7 @@ void readHeaderSizeLength(ifstream &file_ptr, size_t &len)
 
 void decompressController(string compressed_file_path)
 {
-
-	MyLogger *l = MyLogger::GetInstance("./logs/decompress_logs.logs");
+	MyLogger *l = MyLogger::GetInstance("./logs/decompress_logs.log");
 
 	l->logIt(l->LOG_INFO, "Initialization done...");
 
@@ -43,7 +42,7 @@ void decompressController(string compressed_file_path)
 	input_file_ptr.get(temp_char);
 	unique_characters = (short)temp_char;
 	char huff_tree_arr[HUFF_TREE_MAX_NODE_COUNT];
-	memset(huff_tree_arr, '0', HUFF_TREE_MAX_NODE_COUNT);
+	memset(huff_tree_arr, 0, HUFF_TREE_MAX_NODE_COUNT);
 
 	// Note: 0 is 1, 1 is 2 and so on... hence adding 1
 	++unique_characters;
@@ -76,7 +75,7 @@ void decompressController(string compressed_file_path)
 				iterator *= 2;
 			}
 		}
-		l->logIt(l->LOG_INFO, "%c Code = %s len=%d", ch, codes.c_str(), len);
+		l->logIt(l->LOG_DEBUG, "huffman_code[%d] (%c) {%d} = %s", (int)ch, ch, len, codes.c_str());
 		huff_tree_arr[iterator] = ch;
 	}
 	// for (int i = 0; i < HUFF_TREE_MAX_NODE_COUNT; i++)
@@ -97,10 +96,10 @@ void decompressController(string compressed_file_path)
 		gap_array[i] = (short)temp_char;
 	}
 
-	for (int i = 0; i < gap_array_size; i++)
-	{
-		l->logIt(l->LOG_DEBUG, "gap_array[%d] = %hu", i, gap_array[i]);
-	}
+	// for (int i = 0; i < gap_array_size; i++)
+	// {
+	// 	l->logIt(l->LOG_DEBUG, "gap_array[%d] = %hu", i, gap_array[i]);
+	// }
 
 	// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Segment Size ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -119,7 +118,7 @@ void decompressController(string compressed_file_path)
 
 	size_t decompresseded_data_size;
 	readHeaderSizeLength(input_file_ptr, decompresseded_data_size);
-	l->logIt(l->LOG_DEBUG, "Uncompressed Data Size = %zu", decompresseded_data_size);
+	l->logIt(l->LOG_DEBUG, "Decompressed Data Size = %zu", decompresseded_data_size);
 
 	// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Compressed Data ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -175,6 +174,17 @@ void decompressController(string compressed_file_path)
 	int local_work_size = 256;
 	int global_work_size = round_global_size(local_work_size, decompresseded_data_size);
 
+	l->logIt(l->LOG_DEBUG, "writing global counter");
+	cl_mem global_counter = clfw->ocl_create_buffer(CL_MEM_READ_WRITE, sizeof(cl_int));
+	l->logIt(l->LOG_DEBUG, "1");
+	int zero = 0;
+	clfw->ocl_write_buffer(global_counter, sizeof(int), &zero);
+
+	l->logIt(l->LOG_DEBUG, "writing global decompressed offset");
+	cl_mem global_decompressed_offset = clfw->ocl_create_buffer(CL_MEM_READ_WRITE, sizeof(cl_long));
+	clfw->ocl_write_buffer(global_decompressed_offset, sizeof(cl_long), &zero);
+
+	l->logIt(l->LOG_DEBUG, "writing compressed data buffer");
 	cl_mem compressed_data_buffer = clfw->ocl_create_buffer(CL_MEM_READ_ONLY, compressed_data_size * sizeof(char));
 	clfw->ocl_write_buffer(compressed_data_buffer, compressed_data_size * sizeof(char), compressed_data);
 
@@ -191,14 +201,26 @@ void decompressController(string compressed_file_path)
 
 	int total_segments = (compressed_data_size * 8 / SEGMENT_SIZE) + (compressed_data_size * 8 % SEGMENT_SIZE != 0);
 
-	clfw->ocl_create_kernel("huffDecompress", "bbbbiii", compressed_data_buffer, decompressed_data_buffer, huff_tree_arr_buffer, gap_array_buffer, padding, SEGMENT_SIZE, total_segments);
+	clfw->ocl_create_kernel(
+		"huffDecompress", 
+		"bbbbiiibb", 
+		compressed_data_buffer, 
+		decompressed_data_buffer, 
+		huff_tree_arr_buffer, 
+		gap_array_buffer, 
+		padding, 
+		SEGMENT_SIZE, 
+		total_segments, 
+		global_decompressed_offset, 
+		global_counter
+	);
 
 	clfw->ocl_execute_kernel(global_work_size, local_work_size);
 
 	char *decompressed = new char[decompresseded_data_size];
 	clfw->ocl_read_buffer(decompressed_data_buffer, decompresseded_data_size * sizeof(char), decompressed);
 
-	ofstream outputFile("decompressed.txt");
+	ofstream outputFile("./test/decompressed.txt");
 	if (outputFile.is_open())
 	{
 		for (int i = 0; i < decompresseded_data_size; i++)
@@ -207,7 +229,7 @@ void decompressController(string compressed_file_path)
 		}
 
 		outputFile.close();
-		cout<<"Data written to the file successfully."<<endl;;
+		cout<<"Data written to the file successfully." << endl;
 		l->logIt(l->LOG_INFO, "Data written to the file successfully.");
 	}
 	else
@@ -227,8 +249,8 @@ void decompressController(string compressed_file_path)
 
 	// -------------------------------------------------------------------------------------------------------------------
 
-	free(huff_tree_arr);
-	free(gap_array);
+	// free(huff_tree_arr);
+	delete[] gap_array;
 	gap_array = nullptr;
 
 	l->deleteInstance();

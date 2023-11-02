@@ -18,6 +18,7 @@ class CLFWTypes
 
     // Member Variables
     int int_data;
+	long long_data;
     float float_data;
     char char_data;
     unsigned char uchar_data;

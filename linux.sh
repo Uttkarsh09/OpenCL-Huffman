@@ -3,6 +3,7 @@ set -e
 
 clear
 
+# rm main
 cd ./bin/
 rm -rf *
 
@@ -16,4 +17,4 @@ cd ..
 
 pwd
 
-./main
+./main 

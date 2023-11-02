@@ -115,10 +115,10 @@ void compressController(string original_file_path)
 	}
 
 	for (int i = 0; i < TOTAL_CHARS; i++)
-	{
+	{	
 		if (huffman_codes[i][0] != '\0')
 		{
-			l->logIt(l->LOG_DEBUG, "huffman_codes[%d] = %s", i, huffman_codes[i]);
+			l->logIt(l->LOG_DEBUG, "huffman_codes[%d] (%c) = %s", i, (char)i, huffman_codes[i]);
 		}
 	}
 

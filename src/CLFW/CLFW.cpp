@@ -502,6 +502,11 @@ void CLFW::ocl_create_kernel(const char* ocl_kernel_name, const char* ocl_kernel
                 ocl_exec_status(clSetKernelArg(ocl_kernel, i, sizeof(cl_mem), (void*)&clfwTypes->ocl_buffer), __LINE__);
             break;
 
+			case 'l':
+				clfwTypes->long_data = va_arg(kernel_args_list, long);
+				ocl_exec_status(clSetKernelArg(ocl_kernel, i, sizeof(cl_long), (void*)&clfwTypes->ocl_buffer), __LINE__);
+			break;
+
             case 'i':
                 clfwTypes->int_data = va_arg(kernel_args_list, int);
                 ocl_exec_status(clSetKernelArg(ocl_kernel, i, sizeof(cl_int), (void*)&clfwTypes->int_data), __LINE__);
