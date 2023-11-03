@@ -74,7 +74,7 @@ __kernel void huffmanCompress(
 			}
 
 			*global_counter = *global_counter + 1;
-			*global_compressed_bits_writteny = *global_compressed_bits_written + bits_written;
+			*global_compressed_bits_written = *global_compressed_bits_written + bits_written;
 
 			for(int j=0 ; j<segment_size ; j++){
 				prefix_sums_buffer[(segment_size * global_id) + j] += prefix_sums_buffer[segment_size * (global_id-1)];
