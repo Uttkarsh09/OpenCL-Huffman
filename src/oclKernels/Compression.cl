@@ -4,7 +4,7 @@ __kernel void huffmanCompress(
 	__global char *compressed_buffer,
 	__global short *prefix_sums_buffer,
 	__global int *global_counter,
-	__global long *global_compressed_offset,
+	__global long *global_compressed_bits_written,
 	const int segment_size,
 	const int total_segments
 ) {
@@ -15,7 +15,7 @@ __kernel void huffmanCompress(
 
 	ulong read_offset = global_id * segment_size;
 	ulong limit = read_offset + segment_size;
-	ulong sum;
+	ulong sum = 0;
 	uchar encoded_characters[512 * 16], raw_char, compressed_char=0;
 	uchar bits_to_shift=7;
 	ushort i, length = 0, prefix_offset = read_offset;
@@ -40,7 +40,8 @@ __kernel void huffmanCompress(
 			}
 			++i;
 		}
-		prefix_sums_buffer[prefix_offset++] = i + sum;
+		sum += i;
+		prefix_sums_buffer[prefix_offset++] = sum;
 		++read_offset;
 	}
 
@@ -55,8 +56,8 @@ __kernel void huffmanCompress(
 	while(*global_counter != total_segments){
 		if(*global_counter == global_id){
 			length = 0;
-			bits_to_shift = 7 - (*global_compressed_offset % 8);
-			read_offset = *global_compressed_offset / 8;	
+			bits_to_shift = 7 - (*global_compressed_bits_written % 8);
+			read_offset = *global_compressed_bits_written / 8;	
 			compressed_char = compressed_buffer[read_offset];
 
 			while(i <= bits_written){
@@ -73,13 +74,13 @@ __kernel void huffmanCompress(
 			}
 
 			*global_counter = *global_counter + 1;
-			*global_compressed_offset = *global_compressed_offset + bits_written;
+			*global_compressed_bits_writteny = *global_compressed_bits_written + bits_written;
 
 			for(int j=0 ; j<segment_size ; j++){
 				prefix_sums_buffer[(segment_size * global_id) + j] += prefix_sums_buffer[segment_size * (global_id-1)];
 			}
 		}
-
+		
 		barrier(CLK_LOCAL_MEM_FENCE | CLK_GLOBAL_MEM_FENCE);
 	}
 }
