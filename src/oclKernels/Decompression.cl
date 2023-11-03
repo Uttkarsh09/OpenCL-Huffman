@@ -1,29 +1,31 @@
-__kernel void huffDecompress(__global char *compressed_buffer,
-                             __global char *decompressed_buffer,
-                             __global char *huff_tree, 
-							 __global char *gap_arr,
-                             const int padding, 
-							 const int segment_size,
-                             const int total_segments, 
-							 __global int *global_counter,
-                             __global long *global_decompressed_offset) {
+__kernel void huffDecompress(
+	__global char *compressed_buffer,
+	__global char *decompressed_buffer,
+	__global char *huff_tree, 
+	__global char *gap_arr,
+	__global int *global_counter,
+	__global long *global_decompressed_offset,
+	const int padding, 
+	const int segment_size,
+	const int total_segments
+) {
 
 	int global_id = get_global_id(0);
 
   	if (global_id > total_segments)
     	return;
 
-  	ulong write_offset = (global_id * segment_size) + gap_arr[global_id];
+  	ulong read_offset = (global_id * segment_size) + gap_arr[global_id];
   	ulong limit = (global_id < total_segments - 1)
-                    	? write_offset + segment_size + gap_arr[global_id + 1]
-                    	: write_offset + segment_size - padding;
+                    	? read_offset + segment_size + gap_arr[global_id + 1]
+                    	: read_offset + segment_size - padding;
 	int decomp_index = 1;
 	int decomp_buffer_offset = global_id * segment_size;
 	int decoded_length = 0;
 	char decoded_characters[512];
 
-	while (write_offset < limit) {
-		char bit = ((compressed_buffer[write_offset / 8] >> (7 - (write_offset % 8))) & 1) + '0';
+	while (read_offset <= limit) {
+		char bit = ((compressed_buffer[read_offset / 8] >> (7 - (read_offset % 8))) & 1) + '0';
 
 		if (bit == '1') {
 			decomp_index = (decomp_index * 2) + 1;
@@ -39,7 +41,7 @@ __kernel void huffDecompress(__global char *compressed_buffer,
       		decomp_index = 1;
     	}
 
-    	write_offset++;
+    	read_offset++;
   	}
 
   	barrier(CLK_LOCAL_MEM_FENCE | CLK_GLOBAL_MEM_FENCE);

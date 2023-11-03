@@ -176,9 +176,8 @@ void decompressController(string compressed_file_path)
 
 	l->logIt(l->LOG_DEBUG, "writing global counter");
 	cl_mem global_counter = clfw->ocl_create_buffer(CL_MEM_READ_WRITE, sizeof(cl_int));
-	l->logIt(l->LOG_DEBUG, "1");
 	int zero = 0;
-	clfw->ocl_write_buffer(global_counter, sizeof(int), &zero);
+	clfw->ocl_write_buffer(global_counter, sizeof(cl_int), &zero);
 
 	l->logIt(l->LOG_DEBUG, "writing global decompressed offset");
 	cl_mem global_decompressed_offset = clfw->ocl_create_buffer(CL_MEM_READ_WRITE, sizeof(cl_long));
@@ -201,18 +200,19 @@ void decompressController(string compressed_file_path)
 
 	int total_segments = (compressed_data_size * 8 / SEGMENT_SIZE) + (compressed_data_size * 8 % SEGMENT_SIZE != 0);
 
+	// TODO: convert global_decompressed_offset variable to long = 'l' instead of 'i'
 	clfw->ocl_create_kernel(
 		"huffDecompress", 
-		"bbbbiiibb", 
+		"bbbbbbiii", 
 		compressed_data_buffer, 
 		decompressed_data_buffer, 
 		huff_tree_arr_buffer, 
 		gap_array_buffer, 
+		global_decompressed_offset, 
+		global_counter,
 		padding, 
 		SEGMENT_SIZE, 
-		total_segments, 
-		global_decompressed_offset, 
-		global_counter
+		total_segments 
 	);
 
 	clfw->ocl_execute_kernel(global_work_size, local_work_size);

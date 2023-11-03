@@ -161,7 +161,7 @@ void CLFW::ocl_get_platforms(void)
         {
             cout << endl << "OPENCL PLATFORMS" << endl;
             cout << "-------------------------------------------------------------";
-            for (int i = 0; i < ocl_num_platforms; i++)
+            for (unsigned int i = 0; i < ocl_num_platforms; i++)
             {
                 ocl_exec_status(clGetPlatformInfo(ocl_platforms[i], CL_PLATFORM_NAME, 500, &ocl_platform_info, NULL), __LINE__);
                 cout << endl << "Platform " << i + 1 << " : " << ocl_platform_info;
@@ -171,7 +171,7 @@ void CLFW::ocl_get_platforms(void)
     }
 }
 
-void CLFW::ocl_set_platform(int platform)
+void CLFW::ocl_set_platform(unsigned int platform)
 {
     if (platform <= ocl_num_platforms)
         ocl_platform_id = ocl_platforms[platform - 1];
@@ -234,7 +234,7 @@ void CLFW::ocl_get_devices(void)
             {
                 cout << endl << "OPENCL DEVICES" << endl;
                 cout << "-------------------------------------------------------------";
-                for (int i = 0; i < ocl_num_devices; i++)
+                for (unsigned int i = 0; i < ocl_num_devices; i++)
                 {
                     clGetDeviceInfo(ocl_devices[i], CL_DEVICE_NAME, sizeof(ocl_dev_prop), &ocl_dev_prop, NULL);
                     cout << endl << "Device " << i + 1 << " : " << ocl_dev_prop;
@@ -245,7 +245,7 @@ void CLFW::ocl_get_devices(void)
     }
 }
 
-void CLFW::ocl_set_device(int device)
+void CLFW::ocl_set_device(unsigned int device)
 {
     // Code
     if (device <= ocl_num_devices)
@@ -486,7 +486,6 @@ void CLFW::ocl_create_kernel(const char* ocl_kernel_name, const char* ocl_kernel
 {
     // Variable Declarations
     va_list kernel_args_list;
-	int argument_type_index=0;
 
     // Code
     ocl_kernel = clCreateKernel(ocl_program, ocl_kernel_name, &ocl_result);

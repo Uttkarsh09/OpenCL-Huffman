@@ -80,10 +80,10 @@
         string ocl_get_error_string(cl_int ocl_result);
 
         void ocl_get_platforms(void);
-        void ocl_set_platform(int ocl_platform);
+        void ocl_set_platform(unsigned int ocl_platform);
 
         void ocl_get_devices(void);
-        void ocl_set_device(int ocl_device);
+        void ocl_set_device(unsigned int ocl_device);
 
         void ocl_dev_properties(void);
         const char *ocl_read_kernel_from_file(const char *ocl_kernel_file);

@@ -3,7 +3,7 @@ set -e
 
 clear
 
-# rm main
+rm main
 cd ./bin/
 rm -rf *
 
