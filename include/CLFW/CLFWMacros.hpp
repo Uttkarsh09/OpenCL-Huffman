@@ -7,7 +7,8 @@
 #define CLFW_SUCCESS                EXIT_SUCCESS
 #define CLFW_FAILURE                EXIT_FAILURE
 
-#define DEBUG                       true
+// #define DEBUG                       true
+#define DEBUG                       false
 
 #if defined(WIN32) || defined(_WIN32) || defined(WIN64) || defined(_WIN64)
     #define CLFW_OS 1

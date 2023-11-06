@@ -55,7 +55,7 @@
         // Device Selection
         cl_platform_id ocl_platform_id;
         cl_device_id ocl_device_id;
-        int user_platform, user_device;
+        int user_platform = 1, user_device = 1;
 
         // Device Properties
         cl_ulong ocl_mem_size;

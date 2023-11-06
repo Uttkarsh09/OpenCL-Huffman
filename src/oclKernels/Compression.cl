@@ -1,48 +1,64 @@
+#pragma OPENCL EXTENSION cl_khr_int64_base_atomics : enable
+
 __kernel void huffmanCompress(
 	__global char *input_buffer, 
 	__global uchar *huffman_codes,
-	__global char *compressed_buffer,
+	__global uchar *compressed_buffer,
 	__global short *prefix_sums_buffer,
-	__global int *global_counter,
-	__global long *global_compressed_bits_written,
+	__global uint *global_counter,
+	__global uint *global_compressed_bits_written,
+	const long input_file_size,
 	const int segment_size,
 	const int total_segments
 ) {
 	uint global_id = get_global_id(0);
 
-	if(global_id > total_segments)
+	if(global_id >= total_segments)
 		return;
 
 	ulong read_offset = global_id * segment_size;
 	ulong limit = read_offset + segment_size;
-	ulong sum = 0;
 	uchar encoded_characters[512 * 16], raw_char, compressed_char=0;
-	uchar bits_to_shift=7;
+	uchar bits_to_shift=7, target_bit;
 	ushort i, length = 0, prefix_offset = read_offset;
 	uint bits_written = 0;
 	bool write_remaining = true;
 
+	if(input_file_size < limit){
+		limit = input_file_size;
+	}
+	// printf("input_file_size = %ld\n", input_file_size);
+	// printf("Total segments = %d\n", total_segments);
+	// printf("segment_size = %d\n", segment_size);
+	// printf("limit = %d\n", limit);
+
 	while(read_offset <= limit){
+		// ! ERROR
 		raw_char = input_buffer[read_offset];
 		i = 0;
 
 		while(huffman_codes[(raw_char * 17) + i] != '\0' && i<=16){
 			write_remaining = true;
 			compressed_char = compressed_char | ((huffman_codes[(raw_char * 17) + i] - '0') << bits_to_shift);
+			// printf("raw_char=%c bit=%d bits_to_shift=%d\n", raw_char, (huffman_codes[(raw_char * 17) + i] - '0'), bits_to_shift);
+			// printf("compressed_char = %d\n", compressed_char);
 			++bits_written;
+			++i;
 			bits_to_shift = (bits_to_shift + 7) & 7;
 
 			if(bits_to_shift == 7){
+				// printf("~~~~~~~~ writing~~~~~~~~%d\n", compressed_char);
 				write_remaining = false;
 				encoded_characters[length] = compressed_char;
 				compressed_char ^= compressed_char;
 				++length;
 			}
-			++i;
 		}
-		sum += i;
-		prefix_sums_buffer[prefix_offset++] = sum;
+		// ! ERROR
+		prefix_sums_buffer[prefix_offset] = bits_written;
+		// printf("sum=%d\n", bits_written);
 		++read_offset;
+		++prefix_offset;
 	}
 
 	if(write_remaining == true){
@@ -51,38 +67,65 @@ __kernel void huffmanCompress(
 
 	i=0;
 
-	barrier(CLK_LOCAL_MEM_FENCE | CLK_GLOBAL_MEM_FENCE);
+	barrier(CLK_GLOBAL_MEM_FENCE);
 
-	while(*global_counter != total_segments){
-		if(*global_counter == global_id){
+	while((*global_counter) != total_segments){
+		// printf("global_counter = %d global_id = %d total_segments = %d\n", *global_counter, global_id, total_segments);
+		
+		if((*global_counter) == global_id){
+			// printf("IN here for global_counter=%d and global_id=%d\n", *global_counter, global_id);
+			// printf("global_compressed_bits_written = %lld\n", *global_compressed_bits_written);
 			length = 0;
-			bits_to_shift = 7 - (*global_compressed_bits_written % 8);
-			read_offset = *global_compressed_bits_written / 8;	
+			write_remaining = true;
+			bits_to_shift = 7 - ((*global_compressed_bits_written) % 8);
+			// printf("Bits to shift  = %d\n", bits_to_shift);
+			
+			read_offset = (*global_compressed_bits_written) / 8;
+			// printf("read_offset = %d\n", read_offset);
+			
 			compressed_char = compressed_buffer[read_offset];
 
 			while(i <= bits_written){
-				compressed_char = compressed_char | ((encoded_characters[i/8] - '0') << bits_to_shift);
+				write_remaining = true;
+				// printf("i = %d %d", i, encoded_characters[i/8]);
+				target_bit = (1 << bits_to_shift) & encoded_characters[i/8];
+				// printf("target_bit = %d\n", target_bit);
+				compressed_char = compressed_char | target_bit;
+				// printf("compressed_char = %d\n", compressed_char);
+				// printf("Bits to shift  = %d\n", bits_to_shift);
 				bits_to_shift = (bits_to_shift + 7) & 7;
 				++length;
 
 				if(bits_to_shift == 7){
+					write_remaining = false;
 					compressed_buffer[read_offset] = compressed_char;
+					// printf("~~~~~~~~ writing~~~~~~~~%d\n", compressed_char);
 					compressed_char ^= compressed_char;
 					read_offset++;
+					// printf("read offset = %d\n", read_offset);
 				}
 				++i;
+			}printf("\n");
+
+			if(write_remaining){
+				// printf("Write remaining hence writing\n");
+				// printf("writing %d\n", compressed_char);
+				compressed_buffer[read_offset] = compressed_char;
 			}
 
-			*global_counter = *global_counter + 1;
-			*global_compressed_bits_written = *global_compressed_bits_written + bits_written;
+			// *global_counter = *global_counter + 1;
+			atomic_inc(global_counter);
+			// *global_compressed_bits_written = *global_compressed_bits_written + bits_written;
+			atomic_add(global_compressed_bits_written, bits_written);
 
 			if(global_id != 0){
+				// printf("In prefix sum\n");
 				for(int j=0 ; j<segment_size ; j++){
 					prefix_sums_buffer[(segment_size * global_id) + j] += prefix_sums_buffer[segment_size * (global_id-1)];
 				}
 			}
 		}
 		
-		barrier(CLK_LOCAL_MEM_FENCE | CLK_GLOBAL_MEM_FENCE);
+		barrier(CLK_GLOBAL_MEM_FENCE);
 	}
 }

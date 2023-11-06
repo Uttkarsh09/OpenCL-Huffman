@@ -101,6 +101,7 @@ void compressController(string original_file_path)
 
 	l->logIt(l->LOG_INFO, "Original File Size -> %d bytes", file_size);
 	l->logIt(l->LOG_INFO, "compressed file size = %d bits", compressed_file_size_bits);
+	l->logIt(l->LOG_INFO, "compressed file size = %d bytes", compressed_file_size_bytes);
 	l->logIt(l->LOG_INFO, "i.e %d bytes + %d bits", compressed_file_size_bits / 8, compressed_file_size_bits % 8);
 
 	char huffman_codes[TOTAL_CHARS][MAX_HUFF_ENCODING_LENGTH + 1];
@@ -119,7 +120,7 @@ void compressController(string original_file_path)
 	{	
 		if (huffman_codes[i][0] != '\0')
 		{
-			l->logIt(l->LOG_DEBUG, "huffman_codes[%d] (%c) = %s", i, (char)i, huffman_codes[i]);
+			l->logIt(l->LOG_INFO, "huffman_codes[%d] (%c) = %s", i, (char)i, huffman_codes[i]);
 		}
 	}
 
@@ -129,49 +130,65 @@ void compressController(string original_file_path)
 	puts("IN ENCODING & PREFIX SUM");
 
 	cl_mem huffman_codes_buffer = clfw->ocl_create_buffer(CL_MEM_READ_ONLY, TOTAL_CHARS * sizeof(char) * (MAX_HUFF_ENCODING_LENGTH + 1));
-	cl_mem compressed_output_buffer = clfw->ocl_create_buffer(CL_MEM_READ_WRITE, sizeof(char) * compressed_file_size_bytes);
-	cl_mem prefix_sums_buffer = clfw->ocl_create_buffer(CL_MEM_READ_WRITE, file_size * sizeof(cl_short));
-	cl_mem global_counter = clfw->ocl_create_buffer(CL_MEM_READ_WRITE, sizeof(cl_int));
-	cl_mem global_compressed_offset = clfw->ocl_create_buffer(CL_MEM_READ_WRITE, sizeof(cl_long));
+	cl_mem compressed_buffer = clfw->ocl_create_buffer(CL_MEM_READ_WRITE, compressed_file_size_bytes);
+	cl_mem prefix_sums_buffer = clfw->ocl_create_buffer(CL_MEM_READ_WRITE, file_size * sizeof(short));
+	cl_mem global_counter = clfw->ocl_create_buffer(CL_MEM_READ_WRITE, sizeof(int));
+	cl_mem global_compressed_bits_written = clfw->ocl_create_buffer(CL_MEM_READ_WRITE, sizeof(int));
 	string ocl_compression_kernel_path = "./src/oclKernels/Compression.cl";
 	string ocl_parallel_prefix_sum_kernel_path = "./src/oclKernels/ParallelPrefixSum.cl";
-	char *compressed_output = new char[compressed_file_size_bytes];
-	cl_ulong *prefix_sums = new cl_ulong[file_size];
+	short *prefix_sums = new short[file_size];
 	int total_segments = (file_size / SEGMENT_SIZE) + ((file_size % SEGMENT_SIZE) != 0);
 	int zero = 0;
-	cl_int segment_size_ocl = SEGMENT_SIZE;
 
-	clfw->ocl_write_buffer(global_counter, sizeof(cl_int), &zero);
-	clfw->ocl_write_buffer(global_compressed_offset, sizeof(cl_long), &zero);
+	// char *compressed_output = new char[compressed_file_size_bytes];
+	// char compressed_output[compressed_file_size_bytes];
+	unsigned char *compressed_output = NULL;
+	clfw->host_alloc_mem((void**)&compressed_output, "uchar", compressed_file_size_bytes);
+	cout << "TOTAL SIZE = " << sizeof(&compressed_output) << endl;
+
+	clfw->ocl_write_buffer(global_compressed_bits_written, sizeof(int), &zero);
+	clfw->ocl_write_buffer(global_counter, sizeof(int), &zero);
 	clfw->ocl_write_buffer(huffman_codes_buffer, sizeof(char) * TOTAL_CHARS * (MAX_HUFF_ENCODING_LENGTH + 1), huffman_codes);
 	clfw->ocl_create_program(ocl_compression_kernel_path.c_str());
 	
-	l->logIt(l->LOG_DEBUG, "Creating the kernel");
+	l->logIt(l->LOG_INFO, "Creating the kernel");
+	l->logIt(l->LOG_INFO, "file size = %ld", file_size);
+
+	// unsigned long somelong = 21;
+
 	clfw->ocl_create_kernel(
 		"huffmanCompress",
-		"bbbbbbii",
+		"bbbbbblii",
 		file_buffer,
 		huffman_codes_buffer,
-		compressed_output_buffer,
+		compressed_buffer,
 		prefix_sums_buffer,
 		global_counter,
-		global_compressed_offset,
+		global_compressed_bits_written,
+		file_size,
 		SEGMENT_SIZE,
 		total_segments
 	);
 
-	clfw->ocl_execute_kernel(round_global_size(local_size, file_size), local_size);
+	clfw->ocl_execute_kernel(round_global_size(local_size, total_segments), local_size);
+
 	l->logIt(l->LOG_DEBUG, "reading compressed output");
-	clfw->ocl_read_buffer(compressed_output_buffer, sizeof(char) * compressed_file_size_bytes, compressed_output);
+	clfw->ocl_read_buffer(compressed_buffer, compressed_file_size_bytes, compressed_output);
+
+	for(int i=0 ; i<compressed_file_size_bytes ; i++){
+		l->logIt(l->LOG_DEBUG, "compressed values = %d", compressed_output[i]);
+	}
 
 	// Note: prefix_sum only contains size of encoded bits.
 	l->logIt(l->LOG_DEBUG, "prefix sum buffer");
 	cout << "reading prefix sum buffer" << endl;
-	clfw->ocl_read_buffer(prefix_sums_buffer, file_size * sizeof(cl_short), prefix_sums);
+	clfw->ocl_read_buffer(prefix_sums_buffer, file_size * sizeof(short), prefix_sums);
+	l->logIt(l->LOG_DEBUG, "read all buffers");
 
-	// for (size_t i = 0; i < file_size; i++){
+	// for (size_t i = 0; i < file_size; i++)
 	// l->logIt(l->LOG_INFO, "%c->%s prefixSum->%d", file_ptr[i], compressed_output[i], prefix_sums[i]);
-	// }
+
+	clfw->ocl_release_buffer(compressed_buffer);
 	clfw->ocl_release_buffer(prefix_sums_buffer);
 	clfw->ocl_release_buffer(huffman_codes_buffer);
 	clfw->ocl_release_buffer(file_buffer);
@@ -181,28 +198,28 @@ void compressController(string original_file_path)
 // -------------------------------------------------------------------------------------------------------------------
 	puts("IN GAP ARRAYS");
 
-	// // Note: (compressed_file_size_bits%SEGMENT_SIZE != 0) adds 1 if not properly divisible.
+	// Note: (compressed_file_size_bits%SEGMENT_SIZE != 0) adds 1 if not properly divisible.
 	cl_uint gap_array_size = (compressed_file_size_bits / SEGMENT_SIZE) + (compressed_file_size_bits % SEGMENT_SIZE != 0);
-	// cl_uint prefix_sums_size = file_size;
-	// cl_uint gap_idx = 1;
-	// cl_ulong sum = 0, next_limit = 0;
+	cl_uint prefix_sums_size = file_size;
+	cl_uint gap_idx = 1;
+	cl_ulong next_limit = 0;
 	short *gap_array = new short[sizeof(short) * gap_array_size];
 
-	// gap_array[0] = 0;
-	// next_limit = SEGMENT_SIZE * gap_idx;
+	gap_array[0] = 0;
+	next_limit = SEGMENT_SIZE * gap_idx;
 
-	// for (cl_uint i = 0; i < prefix_sums_size - 1; i++)
-	// {
-	// 	sum += prefix_sums[i];
-	// 	// l->logIt(l->LOG_INFO, "sum = %d", sum);
-	// 	if (sum >= next_limit)
-	// 	{
-	// 		gap_array[gap_idx] = sum - next_limit;
-	// 		// l->logIt(l->LOG_INFO, "gap_array[%d] = %d", gap_idx, gap_array[gap_idx]);
-	// 		++gap_idx;
-	// 		next_limit = SEGMENT_SIZE * gap_idx;
-	// 	}
-	// }
+	for (cl_uint i = 0; i < prefix_sums_size - 1; i++)
+	{
+		// sum += prefix_sums[i];
+		// l->logIt(l->LOG_INFO, "sum = %d", prefix_sums[prefix_sums_size]);
+		if (prefix_sums[prefix_sums_size] >= next_limit)
+		{
+			gap_array[gap_idx] = prefix_sums[prefix_sums_size] - next_limit;
+			// l->logIt(l->LOG_INFO, "gap_array[%d] = %d", gap_idx, gap_array[gap_idx]);
+			++gap_idx;
+			next_limit = SEGMENT_SIZE * gap_idx;
+		}
+	}
 
 	// for(cl_uint i=0 ; i<gap_array_size ; i++){
 	// 	l->logIt(l->LOG_INFO, "gap_arr[%d]->%d", i, gap_array[i]);
@@ -218,10 +235,17 @@ void compressController(string original_file_path)
 	string output_header_buffer = "";
 	ofstream output_file;
 
-	output_file.open(output_file_name);
+	puts("Opening Output file");
+	output_file.open(output_file_name, ios::out | ios::trunc);
+	
+	if(!output_file.is_open()){
+		l->logIt(l->LOG_ERROR, "COULD NOT OPEN OUTPUT FILE");
+		exit(EXIT_FAILURE);
+	}
+	puts("Opening Output file");
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Huffman Info ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
+	puts("WRITING HUFFMAN INFO");
 	// ? UniqueCharacter start from -1 {0 means 1, 1 means 2, to conserve memory}
 	for (size_t i = 0; i < total_frequencies.size(); i++)
 	{
@@ -236,7 +260,7 @@ void compressController(string original_file_path)
 	output_header_buffer = "";
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Gap Array ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
+	puts("WRITING GAP ARRAY");
 	writeHeaderSizeLength(output_file, gap_array_size);
 
 	for (cl_uint i = 0; i < gap_array_size; i++)
@@ -248,56 +272,27 @@ void compressController(string original_file_path)
 	output_header_buffer = "";
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Segment Size ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+	puts("WRITING SEGMENT SIZE");
 
 	writeHeaderSizeLength(output_file, SEGMENT_SIZE);
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Padding ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+	puts("WRITING PADDING");
 
 	short padding = (8 - ((compressed_file_size_bits) & (7))) & (7);
 	output_file.put((unsigned char)padding);
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Data Size ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+	puts("WRITING DATA SIZE");
 
 	writeHeaderSizeLength(output_file, file_size);
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Compressed Data ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-	unsigned char ch = 0;
-	short counter = 0;
-	bool write_remaining = false;
-	short next_bit;
-	const short maxEncodingLength = MAX_HUFF_ENCODING_LENGTH + 1;
+	puts("WRITING COMPRESSED DATA");
 
-	for (size_t i = 0; i < file_size; i++)
-	{
-		short j = 0;
-
-		while (compressed_output[(i * maxEncodingLength) + j] != '\0')
-		{
-			write_remaining = true;
-			next_bit = (int)compressed_output[(i * maxEncodingLength) + j] - 48;
-			ch = ch << 1;
-			ch ^= next_bit;
-			++counter;
-
-			if (counter == 8)
-			{
-				write_remaining = false;
-				output_header_buffer += (unsigned char)ch;
-				ch ^= ch;
-				counter = 0;
-			}
-
-			++j;
-		}
-	}
-
-	l->logIt(l->LOG_CRITICAL, "are padding and remaining bits matching = %d", (padding == 8 - counter));
-	l->logIt(l->LOG_CRITICAL, "padding: %d counter: %d", padding, counter);
-
-	if (write_remaining == true)
-	{
-		ch = ch << (padding);
-		output_header_buffer += (unsigned char)ch;
+	for(int i=0 ; i<compressed_file_size_bytes ; i++){
+		output_header_buffer += compressed_output[i];
+		l->logIt(l->LOG_DEBUG, "writing %d", compressed_output[i]);
 	}
 
 	output_file << output_header_buffer;
@@ -305,19 +300,28 @@ void compressController(string original_file_path)
 	output_file.close();
 
 // -------------------------------------------------------------------------------------------------------------------
+	puts("DONE WRITING");
 
 	delete[] gap_array;
+	puts("1");
 	delete[] compressed_output;
+	puts("2");
 	delete[] prefix_sums;
 
+	puts("3");
 	gap_array = nullptr;
+	puts("4");
 	compressed_output = nullptr;
+	puts("5");
 	prefix_sums = nullptr;
 
-	clfw->ocl_release_buffer(compressed_output_buffer);
+	puts("6");
 	clfw->ocl_uninitialize();
+	puts("7");
 	l->deleteInstance();
+	puts("8");
 
 	delete clfw;
+	puts("9");
 	clfw = nullptr;
 }

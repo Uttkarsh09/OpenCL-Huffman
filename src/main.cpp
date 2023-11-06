@@ -8,6 +8,6 @@ using namespace std;
 int main(void)
 {
 	compressController("./test/testnew.txt");
-	// decompressController("./test/book.txt.huff");
+	// decompressController("./test/testnew.txt.huff");
 	return EXIT_SUCCESS;
 }

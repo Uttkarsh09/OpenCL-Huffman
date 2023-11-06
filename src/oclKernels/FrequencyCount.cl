@@ -13,6 +13,7 @@ void countCharFrequency(
   char c = input_data[gid];
 
   if (c >= 0 && c < 256) {
+	// ! FAILING
     atomic_inc(&char_frequency[c]);
   }
   

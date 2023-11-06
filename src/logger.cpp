@@ -43,6 +43,7 @@ void MyLogger::logIt(LogLevel level, const char * format, ...){
 	vfprintf(fptr, format, args);
 	fprintf(fptr, "\n");
 	va_end(args);
+	fflush(fptr);
 }
 
 void MyLogger::setLogLevel(LogLevel level){
