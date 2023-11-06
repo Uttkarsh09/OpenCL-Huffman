@@ -131,12 +131,12 @@ void compressController(string original_file_path)
 
 	cl_mem huffman_codes_buffer = clfw->ocl_create_buffer(CL_MEM_READ_ONLY, TOTAL_CHARS * sizeof(char) * (MAX_HUFF_ENCODING_LENGTH + 1));
 	cl_mem compressed_buffer = clfw->ocl_create_buffer(CL_MEM_READ_WRITE, compressed_file_size_bytes);
-	cl_mem prefix_sums_buffer = clfw->ocl_create_buffer(CL_MEM_READ_WRITE, file_size * sizeof(short));
+	cl_mem prefix_sums_buffer = clfw->ocl_create_buffer(CL_MEM_READ_WRITE, file_size * sizeof(ulong));
 	cl_mem global_counter = clfw->ocl_create_buffer(CL_MEM_READ_WRITE, sizeof(int));
 	cl_mem global_compressed_bits_written = clfw->ocl_create_buffer(CL_MEM_READ_WRITE, sizeof(int));
 	string ocl_compression_kernel_path = "./src/oclKernels/Compression.cl";
 	string ocl_parallel_prefix_sum_kernel_path = "./src/oclKernels/ParallelPrefixSum.cl";
-	short *prefix_sums = new short[file_size];
+	ulong *prefix_sums = new ulong[file_size];
 	int total_segments = (file_size / SEGMENT_SIZE) + ((file_size % SEGMENT_SIZE) != 0);
 	int zero = 0;
 
@@ -175,14 +175,14 @@ void compressController(string original_file_path)
 	l->logIt(l->LOG_DEBUG, "reading compressed output");
 	clfw->ocl_read_buffer(compressed_buffer, compressed_file_size_bytes, compressed_output);
 
-	for(int i=0 ; i<compressed_file_size_bytes ; i++){
-		l->logIt(l->LOG_DEBUG, "compressed values = %d", compressed_output[i]);
-	}
+	// for(int i=0 ; i<compressed_file_size_bytes ; i++){
+	// 	l->logIt(l->LOG_DEBUG, "compressed values = %d", compressed_output[i]);
+	// }
 
 	// Note: prefix_sum only contains size of encoded bits.
 	l->logIt(l->LOG_DEBUG, "prefix sum buffer");
 	cout << "reading prefix sum buffer" << endl;
-	clfw->ocl_read_buffer(prefix_sums_buffer, file_size * sizeof(short), prefix_sums);
+	clfw->ocl_read_buffer(prefix_sums_buffer, file_size * sizeof(ulong), prefix_sums);
 	l->logIt(l->LOG_DEBUG, "read all buffers");
 
 	// for (size_t i = 0; i < file_size; i++)
@@ -203,19 +203,24 @@ void compressController(string original_file_path)
 	cl_uint prefix_sums_size = file_size;
 	cl_uint gap_idx = 1;
 	cl_ulong next_limit = 0;
-	short *gap_array = new short[sizeof(short) * gap_array_size];
+	short *gap_array = new short[gap_array_size];
 
 	gap_array[0] = 0;
 	next_limit = SEGMENT_SIZE * gap_idx;
 
-	for (cl_uint i = 0; i < prefix_sums_size - 1; i++)
+	l->logIt(l->LOG_DEBUG, "gap_array_size=%d", gap_array_size);
+
+	for (unsigned int i = 0; i < prefix_sums_size - 1; i++)
 	{
 		// sum += prefix_sums[i];
 		// l->logIt(l->LOG_INFO, "sum = %d", prefix_sums[prefix_sums_size]);
-		if (prefix_sums[prefix_sums_size] >= next_limit)
+		// l->logIt(l->LOG_CRITICAL, "next_limit = %d", next_limit);
+		if (prefix_sums[i] >= next_limit)
 		{
-			gap_array[gap_idx] = prefix_sums[prefix_sums_size] - next_limit;
-			// l->logIt(l->LOG_INFO, "gap_array[%d] = %d", gap_idx, gap_array[gap_idx]);
+			// l->logIt(l->LOG_CRITICAL, "i = %d", i);	
+			// l->logIt(l->LOG_INFO, "before=%d after=%d", prefix_sums[i], prefix_sums[i+1]);
+			gap_array[gap_idx] = prefix_sums[i] - next_limit;
+			l->logIt(l->LOG_DEBUG, "gap_array[%d] = %d", gap_idx, gap_array[gap_idx]);
 			++gap_idx;
 			next_limit = SEGMENT_SIZE * gap_idx;
 		}
@@ -292,7 +297,7 @@ void compressController(string original_file_path)
 
 	for(int i=0 ; i<compressed_file_size_bytes ; i++){
 		output_header_buffer += compressed_output[i];
-		l->logIt(l->LOG_DEBUG, "writing %d", compressed_output[i]);
+		// l->logIt(l->LOG_DEBUG, "writing %d", compressed_output[i]);
 	}
 
 	output_file << output_header_buffer;
@@ -303,25 +308,25 @@ void compressController(string original_file_path)
 	puts("DONE WRITING");
 
 	delete[] gap_array;
-	puts("1");
+	// puts("1");
 	delete[] compressed_output;
-	puts("2");
+	// puts("2");
 	delete[] prefix_sums;
 
-	puts("3");
+	// puts("3");
 	gap_array = nullptr;
-	puts("4");
+	// puts("4");
 	compressed_output = nullptr;
-	puts("5");
+	// puts("5");
 	prefix_sums = nullptr;
 
-	puts("6");
+	// puts("6");
 	clfw->ocl_uninitialize();
-	puts("7");
+	// puts("7");
 	l->deleteInstance();
-	puts("8");
+	// puts("8");
 
 	delete clfw;
-	puts("9");
+	// puts("9");
 	clfw = nullptr;
 }

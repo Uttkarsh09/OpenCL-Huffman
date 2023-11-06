@@ -4,7 +4,7 @@ __kernel void huffmanCompress(
 	__global char *input_buffer, 
 	__global uchar *huffman_codes,
 	__global uchar *compressed_buffer,
-	__global short *prefix_sums_buffer,
+	__global ulong *prefix_sums_buffer,
 	__global uint *global_counter,
 	__global uint *global_compressed_bits_written,
 	const long input_file_size,
@@ -16,8 +16,9 @@ __kernel void huffmanCompress(
 	if(global_id >= total_segments)
 		return;
 
-	ulong read_offset = global_id * segment_size;
-	ulong limit = read_offset + segment_size;
+	ulong read_offset = (global_id * segment_size) + (global_id!=0); // ? (global_id!=0) will add 1 when global_id is not 0
+	ulong limit = read_offset + segment_size, sum=0;
+
 	uchar encoded_characters[512 * 16], raw_char, compressed_char=0;
 	uchar bits_to_shift=7, target_bit;
 	ushort i, length = 0, prefix_offset = read_offset;
@@ -27,10 +28,12 @@ __kernel void huffmanCompress(
 	if(input_file_size < limit){
 		limit = input_file_size;
 	}
+
+	printf("%d. offset=%ld limit=%ld\n", global_id, read_offset, limit);
 	// printf("input_file_size = %ld\n", input_file_size);
 	// printf("Total segments = %d\n", total_segments);
 	// printf("segment_size = %d\n", segment_size);
-	// printf("limit = %d\n", limit);
+	printf("limit = %d\n", limit);
 
 	while(read_offset <= limit){
 		// ! ERROR
@@ -55,8 +58,9 @@ __kernel void huffmanCompress(
 			}
 		}
 		// ! ERROR
-		prefix_sums_buffer[prefix_offset] = bits_written;
-		// printf("sum=%d\n", bits_written);
+		sum += i;
+		// printf("%d. bits_written=%d\n", global_id, i);
+		prefix_sums_buffer[prefix_offset] = sum;
 		++read_offset;
 		++prefix_offset;
 	}
@@ -78,12 +82,15 @@ __kernel void huffmanCompress(
 			length = 0;
 			write_remaining = true;
 			bits_to_shift = 7 - ((*global_compressed_bits_written) % 8);
-			// printf("Bits to shift  = %d\n", bits_to_shift);
+			// printf("%d. start Bits to shift  = %d\n", global_id, bits_to_shift);
 			
 			read_offset = (*global_compressed_bits_written) / 8;
-			// printf("read_offset = %d\n", read_offset);
+
+			// printf("%d. start global_compressed_bits_written = %d\n", global_id, *global_compressed_bits_written);
+			// printf("%d. start read_offset = %ld\n", global_id, read_offset);
 			
 			compressed_char = compressed_buffer[read_offset];
+			// printf("%d. start compressed_char = %d\n\n", global_id, compressed_char);
 
 			while(i <= bits_written){
 				write_remaining = true;
@@ -101,27 +108,39 @@ __kernel void huffmanCompress(
 					compressed_buffer[read_offset] = compressed_char;
 					// printf("~~~~~~~~ writing~~~~~~~~%d\n", compressed_char);
 					compressed_char ^= compressed_char;
-					read_offset++;
+					++read_offset;
 					// printf("read offset = %d\n", read_offset);
 				}
 				++i;
-			}printf("\n");
-
-			if(write_remaining){
-				// printf("Write remaining hence writing\n");
-				// printf("writing %d\n", compressed_char);
-				compressed_buffer[read_offset] = compressed_char;
 			}
 
-			// *global_counter = *global_counter + 1;
+			if(write_remaining){
+				// printf("remaining - writing %d\n", compressed_char);
+				compressed_buffer[read_offset] = compressed_char;
+			}
+			
 			atomic_inc(global_counter);
-			// *global_compressed_bits_written = *global_compressed_bits_written + bits_written;
 			atomic_add(global_compressed_bits_written, bits_written);
 
+			// printf("%d. last Bits to shift  = %d\n", global_id, bits_to_shift);
+			// printf("%d. last read_offset = %ld\n", global_id, read_offset);
+			// printf("%d. Last written compressed char = %d\n", global_id, compressed_char);
+			// printf("%d. last global_compressed_bits_written = %d\n\n\n", global_id, *global_compressed_bits_written);
+
+			read_offset = (global_id * segment_size) + (global_id!=0); // ? (global_id!=0) will add 1 when global_id is not 0
+			limit = read_offset + segment_size;
+
+			if(input_file_size < limit){
+				limit = input_file_size;
+			}
+
 			if(global_id != 0){
-				// printf("In prefix sum\n");
-				for(int j=0 ; j<segment_size ; j++){
-					prefix_sums_buffer[(segment_size * global_id) + j] += prefix_sums_buffer[segment_size * (global_id-1)];
+				int size = limit - read_offset;
+				printf("Previous = %ld\n", prefix_sums_buffer[segment_size * global_id]);
+
+				for(int j=read_offset ; j<=limit ; j++){
+					prefix_sums_buffer[j] += prefix_sums_buffer[segment_size * global_id];
+					// printf("%d. prefix_sum[%d] = %ld\n", global_id, j, prefix_sums_buffer[j]);
 				}
 			}
 		}
