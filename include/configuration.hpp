@@ -10,7 +10,7 @@
 #include <fstream>
 #include <cstdint>
 #include "HuffMacros.hpp"
-#include "CLFW.hpp"
+// #include "CLFW.hpp"
 
 using namespace std;
 

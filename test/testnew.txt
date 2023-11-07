@@ -1,1 +1,17 @@
-abdeabdcbcbdceafbeaad
+We live in a digital era in which communication is largely based on the exchange of digital information on data
+networks. For seamless and rapid communication, an encoding approach that ensures efficiency, simplicity, and
+security becomes imperative. This necessitates the utilization of parallel computing techniques for compression
+and encryption, guaranteeing optimized and swift data handling while upholding stringent security measures.
+Data compression and encryption are fundamental processes in information management and security. Parallel
+computing, which involves simultaneous task execution by multiple processors or cores, has the potential to
+greatly accelerate these operations.
+In the context of encryption, specifically focusing on the AES algorithm, parallel computing can significantly
+expedite its encryption and decryption processes. Large files can be divided into blocks, and these blocks can be
+encrypted in parallel by different processors or core similar to the compression. Also, it's crucial to recognize that
+the processed data, especially images, must not only be securely transmitted but also retain the ability to undergo
+efficient decompression and decryption upon arrival. This necessitates a balanced approach, where the
+advantages of parallel computing for compression and encryption are harnessed while ensuring that the
+reconstructed data can be seamlessly restored to its original form.
+We propose to implement a system which performs data compression and encryption using parallel computing
+platforms like CUDA and OpenCL which offer great efficiency in terms of time and power usage. The proposed
+implementation will offer portability, independent of end-user hardware and operating system requirements. 

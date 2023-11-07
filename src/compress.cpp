@@ -131,12 +131,12 @@ void compressController(string original_file_path)
 
 	cl_mem huffman_codes_buffer = clfw->ocl_create_buffer(CL_MEM_READ_ONLY, TOTAL_CHARS * sizeof(char) * (MAX_HUFF_ENCODING_LENGTH + 1));
 	cl_mem compressed_buffer = clfw->ocl_create_buffer(CL_MEM_READ_WRITE, compressed_file_size_bytes);
-	cl_mem prefix_sums_buffer = clfw->ocl_create_buffer(CL_MEM_READ_WRITE, file_size * sizeof(ulong));
+	cl_mem prefix_sums_buffer = clfw->ocl_create_buffer(CL_MEM_READ_WRITE, file_size * sizeof(cl_ulong));
 	cl_mem global_counter = clfw->ocl_create_buffer(CL_MEM_READ_WRITE, sizeof(int));
 	cl_mem global_compressed_bits_written = clfw->ocl_create_buffer(CL_MEM_READ_WRITE, sizeof(int));
 	string ocl_compression_kernel_path = "./src/oclKernels/Compression.cl";
 	string ocl_parallel_prefix_sum_kernel_path = "./src/oclKernels/ParallelPrefixSum.cl";
-	ulong *prefix_sums = new ulong[file_size];
+	cl_ulong *prefix_sums = new cl_ulong[file_size];
 	int total_segments = (file_size / SEGMENT_SIZE) + ((file_size % SEGMENT_SIZE) != 0);
 	int zero = 0;
 
@@ -182,7 +182,7 @@ void compressController(string original_file_path)
 	// Note: prefix_sum only contains size of encoded bits.
 	l->logIt(l->LOG_DEBUG, "prefix sum buffer");
 	cout << "reading prefix sum buffer" << endl;
-	clfw->ocl_read_buffer(prefix_sums_buffer, file_size * sizeof(ulong), prefix_sums);
+	clfw->ocl_read_buffer(prefix_sums_buffer, file_size * sizeof(cl_ulong), prefix_sums);
 	l->logIt(l->LOG_DEBUG, "read all buffers");
 
 	// for (size_t i = 0; i < file_size; i++)
@@ -219,16 +219,14 @@ void compressController(string original_file_path)
 		{
 			// l->logIt(l->LOG_CRITICAL, "i = %d", i);	
 			// l->logIt(l->LOG_INFO, "before=%d after=%d", prefix_sums[i], prefix_sums[i+1]);
-			gap_array[gap_idx] = prefix_sums[i] - next_limit;
-			l->logIt(l->LOG_DEBUG, "gap_array[%d] = %d", gap_idx, gap_array[gap_idx]);
-			++gap_idx;
+			gap_array[gap_idx++] = prefix_sums[i] - next_limit;
 			next_limit = SEGMENT_SIZE * gap_idx;
 		}
 	}
 
-	// for(cl_uint i=0 ; i<gap_array_size ; i++){
-	// 	l->logIt(l->LOG_INFO, "gap_arr[%d]->%d", i, gap_array[i]);
-	// }
+	for(cl_uint i=0 ; i<gap_array_size ; i++){
+		l->logIt(l->LOG_INFO, "gap_arr[%d]->%d", i, gap_array[i]);
+	}
 
 // -------------------------------------------------------------------------------------------------------------------
 // Writing Compressed file

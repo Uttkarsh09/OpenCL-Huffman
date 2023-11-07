@@ -96,10 +96,10 @@ void decompressController(string compressed_file_path)
 		gap_array[i] = (short)temp_char;
 	}
 
-	// for (int i = 0; i < gap_array_size; i++)
-	// {
-	// 	l->logIt(l->LOG_DEBUG, "gap_array[%d] = %hu", i, gap_array[i]);
-	// }
+	for (int i = 0; i < gap_array_size; i++)
+	{
+		l->logIt(l->LOG_DEBUG, "gap_array[%d] = %hu", i, gap_array[i]);
+	}
 
 	// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Segment Size ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -129,14 +129,15 @@ void decompressController(string compressed_file_path)
 	}
 
 	size_t start_position = input_file_ptr.tellg();
-	size_t compressed_data_size;
+	size_t compressed_data_size_bytes;
 
 	input_file_ptr.seekg(0, input_file_ptr.end);
-	compressed_data_size = (size_t)input_file_ptr.tellg() - start_position;
+	compressed_data_size_bytes = (size_t)input_file_ptr.tellg() - start_position;
 	input_file_ptr.seekg(start_position);
 
-	char *compressed_data = new char[compressed_data_size];
-	input_file_ptr.read(compressed_data, compressed_data_size);
+	char *compressed_data = new char[compressed_data_size_bytes];
+	input_file_ptr.read(compressed_data, compressed_data_size_bytes);
+	l->logIt(l->LOG_INFO, "compressed data size calculated: %d", compressed_data_size_bytes);
 
 	//  Logic to retrive the actual 0's and 1's
 
@@ -146,7 +147,7 @@ void decompressController(string compressed_file_path)
 
 	// vector<char> compressed_bits;
 
-	// for (size_t i = 0; i < compressed_data_size; ++i)
+	// for (size_t i = 0; i < compressed_data_size_bytes; ++i)
 	// {
 	// 	for (int j = 7; j >= 0; --j)
 	// 	{
@@ -170,7 +171,7 @@ void decompressController(string compressed_file_path)
 	CLFW *clfw = new CLFW();
 	clfw->ocl_initialize();
 
-	// int global_work_size = (compressed_data_size / SEGMENT_SIZE) + ((compressed_data_size % SEGMENT_SIZE) != 0);
+	// int global_work_size = (compressed_data_size_bytes / SEGMENT_SIZE) + ((compressed_data_size_bytes % SEGMENT_SIZE) != 0);
 	int local_work_size = 256;
 	int global_work_size = round_global_size(local_work_size, decompresseded_data_size);
 
@@ -184,8 +185,8 @@ void decompressController(string compressed_file_path)
 	clfw->ocl_write_buffer(global_decompressed_offset, sizeof(cl_long), &zero);
 
 	l->logIt(l->LOG_DEBUG, "writing compressed data buffer");
-	cl_mem compressed_data_buffer = clfw->ocl_create_buffer(CL_MEM_READ_ONLY, compressed_data_size * sizeof(char));
-	clfw->ocl_write_buffer(compressed_data_buffer, compressed_data_size * sizeof(char), compressed_data);
+	cl_mem compressed_data_buffer = clfw->ocl_create_buffer(CL_MEM_READ_ONLY, compressed_data_size_bytes * sizeof(char));
+	clfw->ocl_write_buffer(compressed_data_buffer, compressed_data_size_bytes * sizeof(char), compressed_data);
 
 	cl_mem decompressed_data_buffer = clfw->ocl_create_buffer(CL_MEM_WRITE_ONLY, decompresseded_data_size * sizeof(char));
 
@@ -194,26 +195,26 @@ void decompressController(string compressed_file_path)
 
 	cl_mem gap_array_buffer = clfw->ocl_create_buffer(CL_MEM_READ_ONLY, gap_array_size * sizeof(short));
 	clfw->ocl_write_buffer(gap_array_buffer, gap_array_size * sizeof(short), gap_array);
-
 	string ocl_decompression_kernel_path = "./src/oclKernels/Decompression.cl";
 	clfw->ocl_create_program(ocl_decompression_kernel_path.c_str());
 
-	int total_segments = (compressed_data_size * 8 / SEGMENT_SIZE) + (compressed_data_size * 8 % SEGMENT_SIZE != 0);
+	int total_segments = (compressed_data_size_bytes * 8 / SEGMENT_SIZE) + (compressed_data_size_bytes * 8 % SEGMENT_SIZE != 0);
+
+	int compressed_data_size_bits = (compressed_data_size_bytes * 8) - padding;
 
 	// TODO: convert global_decompressed_offset variable to long = 'l' instead of 'i'
 	clfw->ocl_create_kernel(
-		"huffDecompress", 
-		"bbbbbbiii", 
-		compressed_data_buffer, 
-		decompressed_data_buffer, 
-		huff_tree_arr_buffer, 
-		gap_array_buffer, 
-		global_decompressed_offset, 
+		"huffDecompress",
+		"bbbbbbiii",
+		compressed_data_buffer,
+		decompressed_data_buffer,
+		huff_tree_arr_buffer,
+		gap_array_buffer,
+		global_decompressed_offset,
 		global_counter,
-		padding, 
-		SEGMENT_SIZE, 
-		total_segments 
-	);
+		compressed_data_size_bits,
+		SEGMENT_SIZE,
+		total_segments);
 
 	clfw->ocl_execute_kernel(global_work_size, local_work_size);
 
@@ -229,7 +230,7 @@ void decompressController(string compressed_file_path)
 		}
 
 		outputFile.close();
-		cout<<"Data written to the file successfully." << endl;
+		cout << "Data written to the file successfully." << endl;
 		l->logIt(l->LOG_INFO, "Data written to the file successfully.");
 	}
 	else
