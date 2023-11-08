@@ -199,6 +199,7 @@ void decompressController(string compressed_file_path)
 	clfw->ocl_create_program(ocl_decompression_kernel_path.c_str());
 
 	int total_segments = (compressed_data_size * 8 / SEGMENT_SIZE) + (compressed_data_size * 8 % SEGMENT_SIZE != 0);
+	l->logIt(l->LOG_DEBUG, "total_segments=%d", total_segments);
 
 	// TODO: convert global_decompressed_offset variable to long = 'l' instead of 'i'
 	clfw->ocl_create_kernel(

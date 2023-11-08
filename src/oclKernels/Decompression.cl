@@ -17,12 +17,20 @@ __kernel void huffDecompress(
 
   	ulong read_offset = (global_id * segment_size) + gap_arr[global_id];
   	ulong limit = (global_id < total_segments - 1)
-                    	? read_offset + segment_size + gap_arr[global_id + 1]
-                    	: read_offset + segment_size - padding;
+                    	? (global_id * segment_size) + segment_size + gap_arr[global_id + 1]
+                    	: (global_id * segment_size) + segment_size - padding;
+	
+	if(global_id != 0){
+		++read_offset;
+	}
+
+	printf("%d. read_offset = %ld limit=%ld\n", global_id, read_offset, limit);
+
 	int decomp_index = 1;
 	int decomp_buffer_offset = global_id * segment_size;
 	int decoded_length = 0;
 	char decoded_characters[512];
+	char decoded_character;
 
 	while (read_offset <= limit) {
 		char bit = ((compressed_buffer[read_offset / 8] >> (7 - (read_offset % 8))) & 1) + '0';
@@ -35,8 +43,9 @@ __kernel void huffDecompress(
 		}
 
     	if (huff_tree[decomp_index] != 0 && huff_tree[decomp_index] != 1) {
-      		char decoded_character = huff_tree[decomp_index];
+      		decoded_character = huff_tree[decomp_index];
       		decoded_characters[decoded_length] = decoded_character;
+			printf("%d. decoded_char = %c(%d)\n", global_id, decoded_character, (int)decoded_character);
       		decoded_length++;
       		decomp_index = 1;
     	}
@@ -52,9 +61,9 @@ __kernel void huffDecompress(
 			while (i < decoded_length) {
 				decompressed_buffer[*global_decompressed_offset] = decoded_characters[i];
 				++i;
-				*global_decompressed_offset = *global_decompressed_offset + 1;
+				atomic_inc(global_decompressed_offset);
 			}
-  			*global_counter = *global_counter + 1;
+			atomic_inc(global_counter);
 		}
 		barrier(CLK_LOCAL_MEM_FENCE | CLK_GLOBAL_MEM_FENCE);
 	}
