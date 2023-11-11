@@ -502,8 +502,8 @@ void CLFW::ocl_create_kernel(const char* ocl_kernel_name, const char* ocl_kernel
             break;
 
 			case 'l':
-				clfwTypes->long_data = va_arg(kernel_args_list, long);
-				ocl_exec_status(clSetKernelArg(ocl_kernel, i, sizeof(cl_long), (void*)&clfwTypes->long_data), __LINE__);
+				clfwTypes->long_data = va_arg(kernel_args_list, cl_ulong);
+				ocl_exec_status(clSetKernelArg(ocl_kernel, i, sizeof(cl_ulong), (void*)&clfwTypes->long_data), __LINE__);
 			break;
 
             case 'i':
@@ -661,43 +661,36 @@ void CLFW::ocl_uninitialize(void)
     // Code
     if (ocl_kernel)
     {
-		cout << "freeing ocl_kernel" << endl;
         clReleaseKernel(ocl_kernel);
         ocl_kernel = NULL;
     }
 
     if (ocl_program)
     {
-		cout << "freeing ocl_program" << endl;
         clReleaseProgram(ocl_program);
-		cout << "2" << endl;
         ocl_program = NULL;
     }
 
     if (ocl_command_queue)
     {
-		cout << "freeing ocl_command_queue" << endl;
         clReleaseCommandQueue(ocl_command_queue);
         ocl_command_queue = NULL;
     }
 
     if (ocl_context)
     {
-		cout << "freeing ocl_context" << endl;
         clReleaseContext(ocl_context);
         ocl_context = NULL;
     }
 
     if (ocl_devices)
     {
-		puts("Freeing ocl_devices");
         free(ocl_devices);
         ocl_devices = NULL;
     }
 
     if (ocl_platforms)
     {
-		puts("Freeing ocl_platforms");
         free(ocl_platforms);
         ocl_platforms = NULL;
     }

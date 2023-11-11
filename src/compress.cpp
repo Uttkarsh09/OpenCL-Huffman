@@ -39,7 +39,7 @@ void compressController(string original_file_path)
 
 	// ? Read file size
 	size_t file_size = file_ptr.size();
-	l->logIt(l->LOG_INFO, "file size = %d", file_size);
+	// l->logIt(l->LOG_INFO, "file size = %d", file_size);
 
 	// ? Create buffers for file content and frequency
 	cl_mem file_buffer = clfw->ocl_create_buffer(CL_MEM_READ_ONLY, file_size * sizeof(char));
@@ -64,7 +64,7 @@ void compressController(string original_file_path)
 	int char_frequencies[TOTAL_CHARS];
 	clfw->ocl_read_buffer(frequency_buffer, TOTAL_CHARS * sizeof(int), char_frequencies);
 
-	l->logIt(l->LOG_INFO, "Time Required For GPU(OpenCL) : %fms", clfw->ocl_gpu_time);
+	l->logIt(l->LOG_INFO, "Time Required For frequency count : %fms", clfw->ocl_gpu_time);
 
 	// Get char with frequencies > 0
 	vector<HuffNode *> total_frequencies;
@@ -78,12 +78,13 @@ void compressController(string original_file_path)
 			++unique_charactes;
 		}
 	}
-	l->logIt(l->LOG_INFO, "Unique characters = %d", unique_charactes);
-	l->logIt(l->LOG_INFO, "Character frequencies before sorting");
-	for (HuffNode *node : total_frequencies)
-	{
-		l->logIt(l->LOG_INFO, "Character: %c, frequency: %d", node->ch, node->frequency);
-	}
+
+	// l->logIt(l->LOG_INFO, "Unique characters = %d", unique_charactes);
+	// l->logIt(l->LOG_INFO, "Character frequencies before sorting");
+	// for (HuffNode *node : total_frequencies)
+	// {
+	// 	l->logIt(l->LOG_INFO, "Character: %c, frequency: %d", node->ch, node->frequency);
+	// }
 
 	clfw->ocl_release_buffer(frequency_buffer);
 
@@ -95,6 +96,7 @@ void compressController(string original_file_path)
 	HuffNode *rootNode = generateHuffmanTree(total_frequencies);
 	cl_long compressed_file_size_bits = 0, compressed_file_size_bytes = 0;
 	string tempStr = "";
+	char huffman_codes[TOTAL_CHARS][MAX_HUFF_ENCODING_LENGTH + 1];
 
 	compressed_file_size_bits = populateHuffmanTable(&total_frequencies, rootNode, tempStr);
 	compressed_file_size_bytes = (compressed_file_size_bits / 8) + ((compressed_file_size_bits % 8) != 0);
@@ -104,22 +106,17 @@ void compressController(string original_file_path)
 	l->logIt(l->LOG_INFO, "compressed file size = %d bytes", compressed_file_size_bytes);
 	l->logIt(l->LOG_INFO, "i.e %d bytes + %d bits", compressed_file_size_bits / 8, compressed_file_size_bits % 8);
 
-	char huffman_codes[TOTAL_CHARS][MAX_HUFF_ENCODING_LENGTH + 1];
-
 	memset(huffman_codes, '\0', TOTAL_CHARS * sizeof(char) * (MAX_HUFF_ENCODING_LENGTH + 1));
 
-	for (HuffNode *node : total_frequencies)
-	{
+	for (HuffNode *node : total_frequencies){
 		strcpy(
 			huffman_codes[(int)node->ch], // destination
 			node->compressed.c_str()	  // source
 		);
 	}
 
-	for (int i = 0; i < TOTAL_CHARS; i++)
-	{	
-		if (huffman_codes[i][0] != '\0')
-		{
+	for (int i = 0; i < TOTAL_CHARS; i++){	
+		if (huffman_codes[i][0] != '\0'){
 			l->logIt(l->LOG_INFO, "huffman_codes[%d] (%c) = %s", i, (char)i, huffman_codes[i]);
 		}
 	}
@@ -139,12 +136,9 @@ void compressController(string original_file_path)
 	ulong *prefix_sums = new ulong[file_size];
 	int total_segments = (file_size / SEGMENT_SIZE) + ((file_size % SEGMENT_SIZE) != 0);
 	int zero = 0;
-
-	// char *compressed_output = new char[compressed_file_size_bytes];
-	// char compressed_output[compressed_file_size_bytes];
 	unsigned char *compressed_output = NULL;
+
 	clfw->host_alloc_mem((void**)&compressed_output, "uchar", compressed_file_size_bytes);
-	cout << "TOTAL SIZE = " << sizeof(&compressed_output) << endl;
 
 	clfw->ocl_write_buffer(global_compressed_bits_written, sizeof(int), &zero);
 	clfw->ocl_write_buffer(global_counter, sizeof(int), &zero);
@@ -153,8 +147,6 @@ void compressController(string original_file_path)
 	
 	l->logIt(l->LOG_INFO, "Creating the kernel");
 	l->logIt(l->LOG_INFO, "file size = %ld", file_size);
-
-	// unsigned long somelong = 21;
 
 	clfw->ocl_create_kernel(
 		"huffmanCompress",
@@ -170,7 +162,18 @@ void compressController(string original_file_path)
 		total_segments
 	);
 
+	l->logIt(l->LOG_DEBUG, "total segments=%d", total_segments);
+	l->logIt(l->LOG_DEBUG, "rounded=%d", round_global_size(local_size, total_segments));
+	
+	StopWatchInterface* timer = NULL;
+	sdkCreateTimer(&timer);
+	sdkStartTimer(&timer);
+	float compressionTime = 0.0f;
+	
 	clfw->ocl_execute_kernel(round_global_size(local_size, total_segments), local_size);
+	
+	sdkStopTimer(&timer);
+	compressionTime = sdkGetTimerValue(&timer);
 
 	l->logIt(l->LOG_DEBUG, "reading compressed output");
 	clfw->ocl_read_buffer(compressed_buffer, compressed_file_size_bytes, compressed_output);
@@ -180,10 +183,8 @@ void compressController(string original_file_path)
 	// }
 
 	// Note: prefix_sum only contains size of encoded bits.
-	l->logIt(l->LOG_DEBUG, "prefix sum buffer");
-	cout << "reading prefix sum buffer" << endl;
+	l->logIt(l->LOG_DEBUG, "reading prefix sum buffer");
 	clfw->ocl_read_buffer(prefix_sums_buffer, file_size * sizeof(ulong), prefix_sums);
-	l->logIt(l->LOG_DEBUG, "read all buffers");
 
 	// for (size_t i = 0; i < file_size; i++)
 	// l->logIt(l->LOG_INFO, "%c->%s prefixSum->%d", file_ptr[i], compressed_output[i], prefix_sums[i]);
@@ -196,7 +197,7 @@ void compressController(string original_file_path)
 // -------------------------------------------------------------------------------------------------------------------
 // Gap Arrays
 // -------------------------------------------------------------------------------------------------------------------
-	puts("IN GAP ARRAYS");
+	puts("\nIN GAP ARRAYS");
 
 	// Note: (compressed_file_size_bits%SEGMENT_SIZE != 0) adds 1 if not properly divisible.
 	cl_uint gap_array_size = (compressed_file_size_bits / SEGMENT_SIZE) + (compressed_file_size_bits % SEGMENT_SIZE != 0);
@@ -212,23 +213,14 @@ void compressController(string original_file_path)
 
 	for (unsigned int i = 0; i < prefix_sums_size - 1; i++)
 	{
-		// sum += prefix_sums[i];
-		// l->logIt(l->LOG_INFO, "sum = %d", prefix_sums[prefix_sums_size]);
-		// l->logIt(l->LOG_CRITICAL, "next_limit = %d", next_limit);
 		if (prefix_sums[i] >= next_limit)
 		{
-			// l->logIt(l->LOG_CRITICAL, "i = %d", i);	
-			// l->logIt(l->LOG_INFO, "before=%d after=%d", prefix_sums[i], prefix_sums[i+1]);
 			gap_array[gap_idx] = prefix_sums[i] - next_limit;
-			l->logIt(l->LOG_DEBUG, "gap_array[%d] = %d", gap_idx, gap_array[gap_idx]);
+			l->logIt(l->LOG_DEBUG, "gap_array[%d] = %ld", gap_idx, gap_array[gap_idx]);
 			++gap_idx;
 			next_limit = SEGMENT_SIZE * gap_idx;
 		}
 	}
-
-	// for(cl_uint i=0 ; i<gap_array_size ; i++){
-	// 	l->logIt(l->LOG_INFO, "gap_arr[%d]->%d", i, gap_array[i]);
-	// }
 
 // -------------------------------------------------------------------------------------------------------------------
 // Writing Compressed file
@@ -247,7 +239,7 @@ void compressController(string original_file_path)
 		l->logIt(l->LOG_ERROR, "COULD NOT OPEN OUTPUT FILE");
 		exit(EXIT_FAILURE);
 	}
-	puts("Opening Output file");
+	puts("Opened Output file");
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Huffman Info ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 	puts("WRITING HUFFMAN INFO");
@@ -278,7 +270,7 @@ void compressController(string original_file_path)
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Segment Size ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 	puts("WRITING SEGMENT SIZE");
-
+	
 	writeHeaderSizeLength(output_file, SEGMENT_SIZE);
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Padding ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -305,28 +297,26 @@ void compressController(string original_file_path)
 	output_file.close();
 
 // -------------------------------------------------------------------------------------------------------------------
+	l->logIt(l->LOG_DEBUG, "Time taken from compression: %fms", compressionTime);
+
 	puts("DONE WRITING");
 
+	sdkDeleteTimer(&timer);
+	timer = NULL;
+
 	delete[] gap_array;
-	// puts("1");
 	delete[] compressed_output;
-	// puts("2");
 	delete[] prefix_sums;
 
-	// puts("3");
 	gap_array = nullptr;
-	// puts("4");
 	compressed_output = nullptr;
-	// puts("5");
 	prefix_sums = nullptr;
 
-	// puts("6");
 	clfw->ocl_uninitialize();
-	// puts("7");
 	l->deleteInstance();
-	// puts("8");
 
 	delete clfw;
-	// puts("9");
 	clfw = nullptr;
+
+	puts("Finished compression successfully !");
 }

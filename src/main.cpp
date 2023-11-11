@@ -7,7 +7,14 @@ using namespace std;
 
 int main(void)
 {
-	compressController("./test/testnew.txt");
-	// decompressController("./test/testnew.txt.huff");
+	// compressController("./test/numbers.txt");
+	// decompressController("./test/numbers.txt.huff");
+
+	// compressController("./test/random.txt");
+	// compressController("./test/and_then_there_were_none.txt");
+	compressController("./test/processed.txt");
+	
+	// compressController("./test/book.txt");
+	// decompressController("./test/book.txt.huff");
 	return EXIT_SUCCESS;
 }
