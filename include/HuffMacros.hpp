@@ -8,7 +8,8 @@
 #ifndef TESTING 
 #define SEGMENT_SIZE 16
 #else
-#define SEGMENT_SIZE 512
+// #define SEGMENT_SIZE 512
+#define SEGMENT_SIZE 4096
 #endif
 
 #define HUFF_TREE_MAX_NODE_COUNT 131071

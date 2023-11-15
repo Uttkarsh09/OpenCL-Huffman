@@ -6,6 +6,7 @@ __kernel void huffmanCompress(
 	__global uchar *compressed_buffer,
 	__global ulong *prefix_sums_buffer,
 	__global uint *global_bits_written,
+	__global uint *global_counter,
 	const long input_file_size,
 	const int segment_size,
 	const int total_segments
@@ -17,7 +18,7 @@ __kernel void huffmanCompress(
 
 	ulong read_offset = (global_id * segment_size); // ? (global_id!=0) will add 1 when global_id is not 0
 	ulong limit = read_offset + segment_size;
-	uchar encoded_characters[512 * 16], raw_char, compressed_char=0;
+	uchar encoded_characters[4096 * 16], raw_char, compressed_char=0;
 	uchar bits_to_shift=7, target_bit=0, enc_char_target_bit=0;
 	ushort i, length = 0, prefix_offset = read_offset;
 	uint bits_written = 0;
@@ -65,18 +66,22 @@ __kernel void huffmanCompress(
 		encoded_characters[length] = compressed_char;
 	}
 
+	barrier(CLK_LOCAL_MEM_FENCE | CLK_GLOBAL_MEM_FENCE);
 
-	global_bits_written[global_id] = bits_written;
-	barrier(CLK_GLOBAL_MEM_FENCE | CLK_LOCAL_MEM_FENCE);
-
-	if(global_id != 0){
-		// printf("%d. \n", global_id);
-		for(int j=0 ; j<global_id ; j++){
-			bits_written_till_now += global_bits_written[j];
+	while(*global_counter != total_segments){
+		if(global_id == *global_counter){
+			if(*global_counter > 0){
+				bits_written_till_now = global_bits_written[global_id-1];
+				global_bits_written[global_id] = bits_written_till_now + bits_written;
+			}
+			else {
+				global_bits_written[global_id] = bits_written;
+				bits_written_till_now = 0;
+			}
+			atomic_inc(global_counter);
 		}
-	} 
-	else {
-		bits_written_till_now = 0;
+		
+		barrier(CLK_LOCAL_MEM_FENCE | CLK_GLOBAL_MEM_FENCE);
 	}
 
 	i=0;
@@ -87,7 +92,7 @@ __kernel void huffmanCompress(
 	compressed_char = compressed_buffer[write_offset];
 
 	// printf("%d. bits_to_shift=%d\n", global_id, bits_to_shift);
-	printf("%d. write_offset=%ld bits_written_till_now=%ld bytes_written=%ld\n", global_id, write_offset, bits_written_till_now, bits_written/8);
+	// printf("%d. write_offset=%ld bits_written_till_now=%ld bytes_written=%ld\n", global_id, write_offset, bits_written_till_now, bits_written/8);
 
 	// TODO: If the output is synchronized then simply copy the array contents
 	while(i < bits_written){
@@ -130,5 +135,5 @@ __kernel void huffmanCompress(
 	}
 
 	// printf("%d. Stopping writing at: %ld \nbts: %d\n", global_id, write_offset, bits_to_shift);
-	printf("%-2d. Done\n", global_id);
+	// printf("%-2d. Done\n", global_id);
 }
