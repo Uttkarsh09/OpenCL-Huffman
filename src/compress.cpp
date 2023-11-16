@@ -149,7 +149,7 @@ void compressController(string original_file_path)
 
 	clfw->ocl_create_kernel(
 		"huffmanCompress",
-		"bbbbblii",
+		"bbbbbblii",
 		file_buffer,
 		huffman_codes_buffer,
 		compressed_buffer,
