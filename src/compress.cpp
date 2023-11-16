@@ -129,6 +129,7 @@ void compressController(string original_file_path)
 	cl_mem huffman_codes_buffer = clfw->ocl_create_buffer(CL_MEM_READ_ONLY, TOTAL_CHARS * sizeof(char) * (MAX_HUFF_ENCODING_LENGTH + 1));
 	cl_mem compressed_buffer = clfw->ocl_create_buffer(CL_MEM_READ_WRITE, compressed_file_size_bytes);
 	cl_mem prefix_sums_buffer = clfw->ocl_create_buffer(CL_MEM_READ_WRITE, file_size * sizeof(ulong));
+	cl_mem global_counter = clfw->ocl_create_buffer(CL_MEM_READ_WRITE, sizeof(uint));
 	string ocl_compression_kernel_path = "./src/oclKernels/Compression.cl";
 	string ocl_parallel_prefix_sum_kernel_path = "./src/oclKernels/ParallelPrefixSum.cl";
 	ulong *prefix_sums = new ulong[file_size];
@@ -139,6 +140,7 @@ void compressController(string original_file_path)
 
 	clfw->host_alloc_mem((void**)&compressed_output, "uchar", compressed_file_size_bytes);
 
+	clfw->ocl_write_buffer(global_counter, sizeof(uint), &zero);
 	clfw->ocl_write_buffer(huffman_codes_buffer, sizeof(char) * TOTAL_CHARS * (MAX_HUFF_ENCODING_LENGTH + 1), huffman_codes);
 	clfw->ocl_create_program(ocl_compression_kernel_path.c_str());
 	
@@ -153,6 +155,7 @@ void compressController(string original_file_path)
 		compressed_buffer,
 		prefix_sums_buffer,
 		global_bits_written,
+		global_counter,
 		file_size,
 		SEGMENT_SIZE,
 		total_segments
@@ -161,6 +164,7 @@ void compressController(string original_file_path)
 	l->logIt(l->LOG_DEBUG, "total segments=%d", total_segments);
 	l->logIt(l->LOG_DEBUG, "rounded=%d", round_global_size(local_size, total_segments));
 	
+	l->logIt(l->LOG_DEBUG, "Starting Kernel Execution");
 	StopWatchInterface* timer = NULL;
 	sdkCreateTimer(&timer);
 	sdkStartTimer(&timer);
@@ -185,10 +189,12 @@ void compressController(string original_file_path)
 	// for (size_t i = 0; i < file_size; i++)
 	// l->logIt(l->LOG_INFO, "%c->%s prefixSum->%d", file_ptr[i], compressed_output[i], prefix_sums[i]);
 
-	clfw->ocl_release_buffer(compressed_buffer);
+	clfw->ocl_release_buffer(file_buffer);
 	clfw->ocl_release_buffer(prefix_sums_buffer);
 	clfw->ocl_release_buffer(huffman_codes_buffer);
-	clfw->ocl_release_buffer(file_buffer);
+	clfw->ocl_release_buffer(compressed_buffer);
+	clfw->ocl_release_buffer(global_bits_written);
+	clfw->ocl_release_buffer(global_counter);
 
 // -------------------------------------------------------------------------------------------------------------------
 // Calculating Prefix Sum
